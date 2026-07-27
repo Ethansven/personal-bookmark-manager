@@ -34,6 +34,10 @@ The API accepts **Auth0 JWT access tokens** as Bearer credentials. The JWT strat
 
 ID tokens are NOT accepted as Bearer credentials. Do not "fall back" to id_token.
 
+## Frontend PKCE client
+
+The frontend uses **`oidc-client-ts`** for the Authorization Code + PKCE flow. Don't roll your own PKCE — see ADR-003.
+
 ## Sharing (§3.3)
 
 **Deferred.** See DECISIONS.md. Do not implement any share endpoint. If you find yourself adding one, stop.

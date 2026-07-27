@@ -4,6 +4,26 @@ Short ADR-style log. Newest at top. Each entry: context, decision, trade-offs, h
 
 ---
 
+## ADR-003 — Frontend PKCE client: `oidc-client-ts`
+
+**Context.** Spec §3.1(3) mandates Authorization Code + PKCE (S256). For the SPA we need a client library that handles the code challenge, redirect/callback handling, token refresh, and silent renew. The two credible choices are `oidc-client-ts` (generic, ~25 KB gz, mature) and `@auth0/auth0-spa-js` (vendor-tied, larger, Auth0-specific refresh model).
+
+**Decision.** Use **`oidc-client-ts`**.
+
+**Why.** It's not Auth0-specific — only the discovery URLs are Auth0's. Means the same code would talk to any compliant OIDC provider. Mature: handles PKCE S256 (verified by reviewing its source), token storage default in sessionStorage, silent renew via refresh token. Smaller bundle than auth0-spa-js. Every line we ship is OIDC-flow logic, not Auth0-specific abstractions.
+
+**Trade-offs.**
+
+- ✓ PKCE handled by the lib's `UserManager.signinRedirect({...})`. We control `code_challenge_method: 'S256'`.
+- ✓ Default settings use sessionStorage; switching to localStorage is one option.
+- ✓ Token refresh handled by the lib when `refreshTokenAllowed: true` is set and the tenant issues a refresh token (Auth0 does for our flow).
+- ✗ Lib manages redirect handling; we own the `/callback` route that consumes the redirect result.
+- ✗ No logout-server-side roundtrip supported by default (we'll just clear local tokens).
+
+**How the agent was steered.** "Don't roll your own PKCE — the security cost of one mistake is bigger than the bundle-size cost of a library." CLAUDE.md updated to lock this in.
+
+---
+
 ## ADR-002 — Sharing (§3.3) is deferred
 
 **Context.** Spec §3.3 is one sentence: "Collections hold bookmarks. A user can delete a collection. A user may want to share a collection with someone else." The brief explicitly says we don't have to implement all of it, but must decide, justify, and back up what we ship.
