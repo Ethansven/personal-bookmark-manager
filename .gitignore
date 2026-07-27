@@ -1,0 +1,52 @@
+# dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# build output
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# test / coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# env files — MUST NEVER BE COMMITTED
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# prisma local DB (use a managed DB or commit only schema)
+backend/prisma/dev.db
+backend/prisma/dev.db-journal
+backend/prisma/migrations/dev/
+
+# misc
+.cache/
+.tmp/
+.turbo/
+
+# the original brief — contains credentials, never commit
+Full-Stack-Developer-Test.md
