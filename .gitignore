@@ -47,6 +47,7 @@ backend/prisma/migrations/dev/
 .cache/
 .tmp/
 .turbo/
+.playwright-mcp/
 
 # the original brief — contains credentials, never commit
 Full-Stack-Developer-Test.md
