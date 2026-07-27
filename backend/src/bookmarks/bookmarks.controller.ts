@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { EnsureUserGuard } from '../auth/ensure-user.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import {
@@ -23,7 +24,7 @@ import { BookmarksRepository } from './bookmarks.repository';
 import type { Bookmark } from '@prisma/client';
 
 @Controller('bookmarks')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, EnsureUserGuard)
 export class BookmarksController {
   constructor(private readonly bookmarks: BookmarksRepository) {}
 
