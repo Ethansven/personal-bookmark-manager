@@ -1,0 +1,55 @@
+// BBL bookmark manager — Prisma schema
+// SQLite for the take-home. Swap provider to "postgresql" for prod.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// A signed-in person, keyed by their Auth0 `sub`.
+/// We never store passwords. The test user maps to a row seeded at startup;
+/// every other user is created lazily on first authenticated request.
+model User {
+  id          String       @id // Auth0 sub, e.g. "auth0|abc123"
+  email       String?      @unique
+  createdAt   DateTime     @default(now())
+
+  collections Collection[]
+  bookmarks   Bookmark[]
+}
+
+model Collection {
+  id        String   @id @default(cuid())
+  name      String
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner    User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  bookmarks Bookmark[]
+
+  @@index([ownerId])
+  @@index([ownerId, updatedAt])
+}
+
+model Bookmark {
+  id           String   @id @default(cuid())
+  url          String
+  title        String
+  notes        String?
+  collectionId String?
+  ownerId      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  owner      User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  collection Collection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId])
+  @@index([ownerId, updatedAt])
+  @@index([collectionId])
+}
