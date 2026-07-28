@@ -1,6 +1,6 @@
-import { getAccessToken, userManager } from '../auth/oidc';
+import { clearTokens, getAccessToken, startLogin } from '../auth/auth';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export interface ApiError {
   status: number;
@@ -18,7 +18,7 @@ export async function apiFetch<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const token = await getAccessToken();
+  const token = getAccessToken();
   const headers = new Headers(init.headers ?? {});
   headers.set('Accept', 'application/json');
   if (init.body && !headers.has('Content-Type')) {
@@ -28,12 +28,19 @@ export async function apiFetch<T>(
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers,
+    credentials: 'include',
+  });
 
   if (res.status === 401) {
-    // Token expired or invalid — re-login.
-    void userManager.signinRedirect();
-    throw { status: 401, message: 'Re-authenticating…' } satisfies ApiError;
+    clearTokens();
+    startLogin(window.location.pathname);
+    throw {
+      status: 401,
+      message: 'Re-authenticating…',
+    } satisfies ApiError;
   }
 
   if (res.status === 204) {
@@ -42,7 +49,9 @@ export async function apiFetch<T>(
 
   const body = (await res.json().catch(() => ({}))) as unknown;
   if (!res.ok) {
-    const err = body as { error?: { code?: string; message?: string; details?: unknown } };
+    const err = body as {
+      error?: { code?: string; message?: string; details?: unknown };
+    };
     throw {
       status: res.status,
       code: err.error?.code,

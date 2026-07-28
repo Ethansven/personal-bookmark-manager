@@ -1,30 +1,31 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { userManager } from '../auth/oidc';
 import { Box, CircularProgress, Typography } from '@mui/material';
+import { finishCallback } from '../auth/auth';
 
 /**
- * Receives the OIDC redirect from Auth0 and finalises the login.
- * Any error here is shown to the user; success navigates to /collections.
+ * Receives the redirect from the backend /callback (which itself was
+ * called by Auth0). Parses the token payload from ?p=... and navigates
+ * to the original returnTo target.
  */
-export default function Callback() {
+export default function AuthCallbackPage() {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    userManager
-      .signinRedirectCallback()
-      .then(() => navigate('/collections', { replace: true }))
-      .catch((err: unknown) =>
-        setError(err instanceof Error ? err.message : String(err)),
-      );
+    try {
+      const target = finishCallback();
+      navigate(target, { replace: true });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }, [navigate]);
 
   if (error) {
     return (
       <Box sx={{ p: 4 }}>
         <Typography variant="h6" color="error">
-          Login failed
+          Sign-in failed
         </Typography>
         <Typography>{error}</Typography>
       </Box>

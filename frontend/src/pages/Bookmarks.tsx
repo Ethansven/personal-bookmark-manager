@@ -18,7 +18,7 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useNavigate } from 'react-router-dom';
 import { type Bookmark, type Collection, bookmarksApi, collectionsApi } from '../api/client';
-import { userManager } from '../auth/oidc';
+import { logout } from '../auth/auth';
 
 export default function Bookmarks() {
   const navigate = useNavigate();
@@ -90,7 +90,8 @@ export default function Bookmarks() {
   }
 
   async function handleLogout(): Promise<void> {
-    await userManager.signoutRedirect();
+    await logout();
+    window.location.href = '/login';
   }
 
   return (
