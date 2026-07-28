@@ -34,9 +34,11 @@ The API accepts **Auth0 JWT access tokens** as Bearer credentials. The JWT strat
 
 ID tokens are NOT accepted as Bearer credentials. Do not "fall back" to id_token.
 
-## Frontend PKCE client
+## Frontend auth
 
-The frontend uses **`oidc-client-ts`** for the Authorization Code + PKCE flow. Don't roll your own PKCE — see ADR-003.
+The backend runs the entire OIDC PKCE round-trip — see ADR-005. The SPA never speaks to Auth0 directly. Tokens live in `localStorage['bbl_tokens']` (key shape documented in `API_DESIGN.md`) and are sent as `Authorization: Bearer <accessToken>` on every API call.
+
+Don't roll your own PKCE. Don't add a client secret to the browser bundle. Don't drop the existing `JwtAuthGuard` validation — iss/aud/signature/exp still gate every protected route.
 
 ## Sharing (§3.3)
 

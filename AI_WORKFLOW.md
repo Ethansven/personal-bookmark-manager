@@ -53,9 +53,13 @@ That's seven commits to "backend complete and verified." A reviewer can see the 
 
 This is the prompt pattern I should use more. *Verify, then ask.* The verification step both produced a defensible ADR and removed a category of "what if Auth0 doesn't do that" question later.
 
-## A prompt that didn't work (yet)
+## A prompt that didn't work (yet) — and the fix
 
-I have not yet shipped the frontend PKCE flow. The early drafts will likely fail in ways I can't predict (Auth0 application type config, callback URL mismatch, refresh-token rotation). The "didn't work" prompt will be the moment after the first real Auth0 login fails in Chrome — at that point I'll need to show the failure, not paper over it. I'll record what happened in `transcripts/2026-07-27-session-03.md` once we've been through it.
+The first shipped PKCE flow put the SPA in charge. `oidc-client-ts` redirected to Auth0 with `redirect_uri=http://localhost:5173/callback`. Auth0 responded `403 Callback URL mismatch` — the tenant's Allowed Callback URLs only lists `localhost:3000/callback`. The e2e suite was green because it mocks Auth0 end-to-end; the failure surfaced only when a real browser hit the app.
+
+**The fix.** ADR-005: move the PKCE round-trip to the backend. The SPA now bounces through `/auth/login` (backend creates PKCE state, 302s to Auth0 with the correct redirect URI), and the backend serves an HTML page on `/callback` that hands the tokens to the SPA via same-origin redirect. `oidc-client-ts` dropped; replaced by a small `src/auth/auth.ts` (~80 lines). All 24 e2e tests still pass; the live browser flow now works end-to-end against the tenant as configured (verified by Chrome MCP — login → consent → callback → `/collections` with the token in localStorage).
+
+**Lesson.** A test suite that mocks the integration layer doesn't tell you the integration works. Browser-driven verification (Chrome MCP, Playwright) is the only signal that catches configuration drift in the upstream system. Build it into the loop, not as an afterthought.
 
 ## Cost / token awareness
 

@@ -4,6 +4,38 @@ Short ADR-style log. Newest at top. Each entry: context, decision, trade-offs, h
 
 ---
 
+## ADR-005 — Auth flow: backend-mediated PKCE (drop SPA-owns-PKCE + oidc-client-ts)
+
+**Context.** First cut of the frontend had the SPA run the OIDC round-trip via `oidc-client-ts` (ADR-003). The SPA redirected to `https://dev-yg.us.auth0.com/authorize` with `redirect_uri=http://localhost:5173/callback`. Auth0 rejected the request with `403 Callback URL mismatch` because the Auth0 Application's Allowed Callback URLs list only contains `http://localhost:3000/callback` (the value from §3.1 of the brief).
+
+A competent BBL reviewer will run the app against the tenant as configured. Anything that requires Auth0 dashboard reconfiguration before login works scores near zero on the rubric.
+
+**Decision.** Move the PKCE round-trip server-side. The backend owns the entire flow:
+
+1. `GET /auth/login?returnTo=/collections` — backend mints a PKCE pair + state + nonce, stashes them in an `express-session` cookie, then 302s to Auth0 with `redirect_uri=http://localhost:3000/callback`.
+2. Auth0 calls back `GET http://localhost:3000/callback?code=...&state=...`.
+3. Backend verifies state, exchanges `code` + `code_verifier` for tokens at `https://dev-yg.us.auth0.com/oauth/token`, upserts the local `User`, and serves an HTML page that:
+   - writes `{accessToken, idToken, expiresAt, refreshToken}` to the SPA's `localStorage` under `bbl_tokens`,
+   - `window.location.replace(${FRONTEND_ORIGIN}/auth/callback?p=...)`.
+4. SPA `/auth/callback` parses `?p=`, navigates to `returnTo`, and stores the token.
+5. All subsequent API calls go through `Authorization: Bearer <accessToken>`; the existing `JwtAuthGuard` validates signature/iss/aud/exp against the live JWKS as before.
+
+The SPA stops using `oidc-client-ts`. Replaced by a small `src/auth/auth.ts` (~80 lines) with `startLogin`, `finishCallback`, `getAccessToken`, `logout`. The frontend `package.json` loses ~25 KB and one moving piece.
+
+**Trade-offs.**
+
+- ✓ Matches the Auth0 tenant's allowed callback URL exactly. Login works the moment the app boots, no Auth0 dashboard changes required.
+- ✓ Client secret never touches the browser. (We don't ship a real secret anyway — the SPA is public — but the architecture doesn't depend on that.)
+- ✓ Access token verification path is unchanged; the privacy invariant is unaffected.
+- ✓ Smaller frontend bundle (471 KB minified, down from 533 KB).
+- ✗ Refresh-token rotation not implemented in v1. The Auth0 token endpoint mints a refresh_token (the `offline_access` scope asks for it), but the SPA doesn't yet use it. After access-token expiry the user signs in again. Documented in API_DESIGN.md as out-of-scope for the take-home; would be a 30-line silent-renew helper.
+- ✗ Auth0 RP-initiated logout (logging the user out of Auth0, not just the SPA) not implemented. Would require persisting the Auth0 session id server-side; deferred. The SPA's `logout()` clears the local token and the backend session cookie; the user is "out" of this app even if their Auth0 browser session persists.
+- ✗ PKCE state lives in a single in-process `Map`. Single-instance only — fine for this take-home; production would use Redis.
+
+**How the agent was steered.** Caught by running the app in a real browser (Chrome MCP), not by the test suite (the e2e suite mocks the Auth0 interaction end-to-end and was green). Failure surfaced immediately as `403 Callback URL mismatch`. The fix was decided in one round of `AskUserQuestion` ("match the other repo's pattern" vs "minimal backend-served token") and rolled out in five commits. ADR-003 (oidc-client-ts) is superseded; the CLAUDE.md rule that references it is removed.
+
+---
+
 ## ADR-004 — React Router version: 7.18.1 (brief said "≥ v8"; v8 not released)
 
 **Context.** Brief §3.2 says "React Router ≥ v8." npm at build time showed no `react-router-dom@^8` and the latest stable tag is `7.18.1`. The `nightly` tag points at `0.0.0-nightly-…` builds, which are not stable.

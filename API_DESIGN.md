@@ -13,7 +13,32 @@ Both resources are owner-scoped. There is no public route to any resource.
 
 ## Auth
 
-Every route (except none — there are no public routes) requires `Authorization: Bearer <jwt>`.
+### Login round-trip (backend-mediated PKCE, ADR-005)
+
+The backend runs the entire OIDC round-trip. The SPA never sees Auth0 directly.
+
+| Step | URL | Actor | What happens |
+|---|---|---|---|
+| 1 | `GET /auth/login?returnTo=/collections` | Backend | Mints PKCE pair + state + nonce. Stashes them in `express-session` (HttpOnly `connect.sid` cookie). 302s to Auth0 `/authorize` with `redirect_uri=http://localhost:3000/callback`, `code_challenge_method=S256`, `audience=https://bbl-candidate-test-api`. |
+| 2 | Auth0 `/authorize` | Auth0 | Universal Login. User signs in. |
+| 3 | `GET /callback?code=...&state=...` | Backend | Verifies `state` against the session. Calls Auth0 `/oauth/token` with `code` + `code_verifier` (no `client_secret` — public SPA). Verifies the returned `id_token` (issuer, audience = `AUTH0_CLIENT_ID`, nonce matches). Upserts the local `User` row. Serves an HTML page that writes `{accessToken, idToken, refreshToken, expiresIn}` to `localStorage['bbl_tokens']` and redirects to `${FRONTEND_ORIGIN}/auth/callback?p=<encoded JSON>`. |
+| 4 | `GET /auth/callback` | SPA | Parses `?p=`, stores the token, navigates to `returnTo`. |
+
+Errors render as `text/html` (a small "Sign-in failed" page) so a browser navigation gives the user something to read. Status codes: `400` for missing/bad state, `500` for upstream Auth0 failures.
+
+### `GET /auth/config`
+
+Public, no auth. Returns `{ issuer, audience, clientId, callbackUrl }` — useful for diagnostics and tests. No secrets.
+
+### `POST /auth/logout`
+
+Best-effort: destroys the `express-session`, clears the `connect.sid` cookie. SPA also clears `localStorage['bbl_tokens']`. Auth0 RP-initiated logout is out of scope (ADR-005 trade-offs).
+
+### `GET /auth/me`
+
+Alias for `/me`. Same lazy-upsert behaviour. Kept for compatibility with Auth0-style clients; both routes serve the same payload.
+
+### Bearer token validation (every protected route)
 
 - Token type: **Auth0 JWT access token**. Never an id_token. (See ADR-001.)
 - Validation:
@@ -23,6 +48,21 @@ Every route (except none — there are no public routes) requires `Authorization
   - `exp` not expired (passport-jwt default)
   - algorithms restricted to RS256
 - Identity: `req.user.sub` is the Auth0 `sub` claim (e.g. `auth0|abc123`). This is the local `User.id`. New users are lazy-upserted on the first authenticated request via `EnsureUserGuard` (so `Collection/Bookmark` FK targets always exist before any insert).
+
+### Token storage shape (SPA side)
+
+`localStorage['bbl_tokens']` (JSON-encoded):
+
+```json
+{
+  "accessToken": "eyJ...",
+  "idToken": "eyJ...",
+  "refreshToken": "rt_...",
+  "expiresAt": 1785236485060
+}
+```
+
+`expiresAt` is ms epoch. `apiFetch` re-reads this on every call; an expired entry triggers a re-login via `/auth/login`. Cleartext `refresh_token` is stored in localStorage because we don't yet implement silent renew (ADR-005); a future iteration should move it to an HttpOnly cookie or drop it.
 
 ## Endpoints
 
